@@ -1,16 +1,16 @@
 -module(ar_test_node).
 
 %% The new, more flexible, and more user-friendly interface.
--export([wait_until_joined/0,
+-export([get_config/1,set_config/2, wait_until_joined/0, restart/0, restart/1,
 		start_node/2, start_node/3, start_coordinated/1, base_cm_config/1, mine/1,
 		wait_until_height/2, http_get_block/2, get_blocks/1,
 		mock_to_force_invalid_h1/0, get_difficulty_for_invalid_hash/0, invalid_solution/0,
 		valid_solution/0, remote_call/4]).
 
 %% The "legacy" interface.
--export([boot_peers/0, boot_peer/1, start/0, start/1, start/2, start/3, start/4, stop/0, stop/1,
-		start_peer/2, start_peer/3, start_peer/4, peer_name/1, peer_port/1, stop_peers/0, stop_peer/1,
-		connect_to_peer/1, disconnect_from/1,
+-export([boot_peers/0, boot_peer/1, start/0, start/1, start/2, start/3, start/4,
+		stop/0, stop/1, start_peer/2, start_peer/3, start_peer/4, peer_name/1, peer_port/1,
+		stop_peers/0, stop_peer/1, connect_to_peer/1, disconnect_from/1,
 		join/2, join_on/1, rejoin_on/1,
 		peer_ip/1, get_node_namespace/0, get_unused_port/0,
 
@@ -134,6 +134,12 @@ wait_until_joined() ->
 		100,
 		60 * 1000
 	 ).
+
+get_config(Node) ->
+	remote_call(Node, application, get_env, [arweave, config]).
+
+set_config(Node, Config) ->
+	remote_call(Node, application, set_env, [arweave, config, Config]).
 
 %% @doc Start a node with the given genesis block and configuration.
 start_node(B0, Config) ->
@@ -478,7 +484,15 @@ start(B0, RewardAddr, Config, StorageModules) ->
 	wait_until_joined(),
 	wait_until_syncs_genesis_data().
 
+restart() ->
+	stop(),
+	ar:start_dependencies(),
+	wait_until_joined(),
+	wait_until_syncs_genesis_data().
 
+restart(Node) ->
+	remote_call(Node, ?MODULE, restart, []).
+	
 start_peer(Node, Args) when is_list(Args) ->
 	remote_call(Node, ?MODULE, start , Args, ?PEER_START_TIMEOUT),
 	wait_until_joined(Node),

@@ -135,6 +135,12 @@ store_block_index(BI) ->
 
 %% @doc Record the block index update on disk. Remove the orphans, if any.
 update_block_index(TipHeight, OrphanCount, BI) ->
+	lists:foreach(
+        fun({H, _WeaveSize, _TXRoot}) ->
+            ?LOG_ERROR([{event, storage_update_block_index}, {hash, ar_util:encode(H)}])
+        end,
+        BI
+    ),
 	%% Height of the earliest orphaned block. This height and higher will be deleted from
 	%% the block index. If OrphanCount is 0, then no blocks will be deleted from the block index.
 	OrphanHeight = TipHeight - OrphanCount + 1,
@@ -143,6 +149,11 @@ update_block_index(TipHeight, OrphanCount, BI) ->
 	%% need to rewrite the index starting at a lower height.
 	IndexHeight = TipHeight - max(0, OrphanCount-1),
 	%% 1. Delete all the orphaned blocks from the block index
+	?LOG_ERROR([{event, storage_update_block_index}, {orphan_height, OrphanHeight},
+		{tip_height, TipHeight}, {index_height, IndexHeight}]),
+
+	TRY TO PRINT WHATS IN THE block_index_db after this update
+
 	case ar_kv:delete_range(block_index_db,
 			<< OrphanHeight:256 >>, << (TipHeight + 1):256 >>) of
 		ok ->

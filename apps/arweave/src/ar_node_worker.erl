@@ -95,6 +95,7 @@ init([]) ->
 	validate_trusted_peers(Config),
 	StartFromLocalState = Config#config.start_from_latest_state orelse
 			Config#config.start_from_block /= undefined,
+	?LOG_ERROR([{event, ar_node_worker}, {start_from_block, ar_util:safe_encode(Config#config.start_from_block)}]),
 	case {StartFromLocalState, Config#config.init, Config#config.auto_join} of
 		{false, false, true} ->
 			ar_join:start(ar_peers:get_trusted_peers());
@@ -105,18 +106,21 @@ init([]) ->
 				BI ->
 					case get_block_index_at_state(BI, Config) of
 						not_found ->
+							?LOG_ERROR([{event, init}, {reason, block_index_not_found}]),
 							block_index_not_found();
 						BI2 ->
 							Height = length(BI2) - 1,
+							?LOG_ERROR([{event, init}, {reason, block_index_found},
+								{bi_size, length(BI2)}, {height, Height}]),
 							case start_from_state(BI2, Height) of
 								ok ->
 									ok;
 								Error ->
 									ar:console("~n~n\tFailed to read the local state: ~p.~n",
 											[Error]),
-									timer:sleep(1000),
 									?LOG_INFO([{event, failed_to_read_local_state},
 											{reason, io_lib:format("~p", [Error])}]),
+									timer:sleep(1000),
 									erlang:halt()
 							end
 					end
@@ -176,6 +180,7 @@ get_block_index_at_state(BI, Config) ->
 			BI;
 		false ->
 			H = Config#config.start_from_block,
+			?LOG_ERROR([{event, get_block_index_at_state}, {start_from_block, ar_util:encode(H)}]),
 			get_block_index_at_state2(BI, H)
 	end.
 
@@ -903,7 +908,19 @@ apply_block3(B, [PrevB | _] = PrevBlocks, Timestamp, State) ->
 	RootHash = PrevB#block.wallet_list,
 	TXs = B#block.txs,
 	Accounts = ar_wallets:get(RootHash, [B#block.reward_addr | ar_tx:get_addresses(TXs)]),
+	lists:foreach(
+		fun({H, _WeaveSize, _TXRoot}) ->
+			?LOG_ERROR([{event, before_update_block_index}, {hash, ar_util:encode(H)}])
+		end,
+		RecentBI
+	),
 	{Orphans, RecentBI2} = update_block_index(B, PrevBlocks, RecentBI),
+	lists:foreach(
+		fun({H, _WeaveSize, _TXRoot}) ->
+			?LOG_ERROR([{event, after_update_block_index}, {hash, ar_util:encode(H)}])
+		end,
+		RecentBI2
+	),
 	BlockTXPairs2 = update_block_txs_pairs(B, PrevBlocks, BlockTXPairs),
 	BlockTXPairs3 = tl(BlockTXPairs2),
 	{BlockAnchors, RecentTXMap} = get_block_anchors_and_recent_txs_map(BlockTXPairs3),
@@ -1651,10 +1668,19 @@ start_from_state([#block{} = GenesisB]) ->
 		block_time_history = BlockTimeHistory
 	}]}.
 start_from_state(BI, Height) ->
+	lists:foreach(
+        fun({H, _WeaveSize, _TXRoot}) ->
+            ?LOG_ERROR([{event, start_from_state}, {hash, ar_util:encode(H)}])
+        end,
+        BI
+    ),
 	case read_recent_blocks(BI, min(length(BI) - 1, ?START_FROM_STATE_SEARCH_DEPTH)) of
 		not_found ->
+			?LOG_ERROR([{event, start_from_state}, {reason, block_headers_not_found}]),
 			block_headers_not_found;
 		{Skipped, Blocks} ->
+			?LOG_ERROR([{event, start_from_state}, {skipped, Skipped},
+				{blocks, length(Blocks)}, {height, Height}, {bi, length(BI)}]),
 			BI2 = lists:nthtail(Skipped, BI),
 			Height2 = Height - Skipped,
 			RewardHistoryBI = ar_rewards:trim_reward_history(Height, BI2),
