@@ -329,6 +329,7 @@ write_genesis_files(DataDir, B0) ->
 	H = B0#block.indep_hash,
 	WeaveSize = B0#block.weave_size,
 	TXRoot = B0#block.tx_root,
+	?LOG_ERROR([{event, genesis}, {height, 0}, {hash, ar_util:encode(H)}]),
 	ok = ar_kv:put(block_index_db, << 0:256 >>, term_to_binary({H, WeaveSize, TXRoot, <<>>})),
 	ok = ar_kv:put(reward_history_db, H, term_to_binary(hd(B0#block.reward_history))),
 	case ar_fork:height_2_7() of

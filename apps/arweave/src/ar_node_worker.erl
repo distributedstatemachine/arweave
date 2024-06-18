@@ -1363,7 +1363,24 @@ apply_validated_block2(State, B, PrevBlocks, Orphans, RecentBI, BlockTXPairs) ->
 		end,
 		tl(lists:reverse(PrevBlocks))
 	),
+
+	{ok, Map1} = ar_kv:get_range(block_index_db, <<>>),
+    lists:foreach(
+		fun({Key, Value}) ->
+			{H, _WeaveSize, _TXRoot, _PrevH} = binary_to_term(Value),
+			?LOG_ERROR("BEFORE: Height: ~p, Hash: ~s~n", [Key, ar_util:encode(H)])
+		end,
+		lists:reverse(lists:sort(maps:to_list(Map1)))
+	),
 	ar_storage:update_block_index(B#block.height, OrphanCount, AddedBIElements),
+	{ok, Map2} = ar_kv:get_range(block_index_db, <<>>),
+	lists:foreach(
+		fun({Key, Value}) ->
+			{H, _WeaveSize, _TXRoot, _PrevH} = binary_to_term(Value),
+			?LOG_ERROR("AFTER: Height: ~p, Hash: ~s~n", [Key, ar_util:encode(H)])
+		end,
+		lists:reverse(lists:sort(maps:to_list(Map2)))
+	),
 	ar_storage:store_reward_history_part(AddedBlocks),
 	ar_storage:store_block_time_history_part(AddedBlocks, lists:last(PrevBlocks)),
 	ets:insert(node_state, [
